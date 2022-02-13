@@ -29,7 +29,6 @@ interface RengoTeamManagementPaneProps {
     moderator: boolean;
     show_chat: boolean;
     assignToTeam: (player_id: number, team: string, challenge: Challenge, done: () => void) => void;
-    assignAllToNominees: (challenge: Challenge, done: () => void) => void;
 }
 
 interface RengoTeamManagementPaneState {
@@ -55,11 +54,6 @@ export class RengoTeamManagementPane extends React.PureComponent<
     _assignToTeam = (player_id: number, team: string, challenge: Challenge) => {
         this.setState({ assignment_pending: true });
         this.props.assignToTeam(player_id, team, challenge, this.done.bind(self));
-    };
-
-    _assignAllToNominees = (challenge: Challenge) => {
-        this.setState({ assignment_pending: true });
-        this.props.assignAllToNominees(challenge, this.done.bind(self));
     };
 
     render = () => {
@@ -189,16 +183,6 @@ export class RengoTeamManagementPane extends React.PureComponent<
                             <Player user={n} rank={true} key={i} />
                         </div>
                     ))}
-                    {(the_challenge.user_challenge || this.props.moderator || null) && (
-                        <div className="rengo-team-management-buttons">
-                            <button
-                                onClick={this._assignAllToNominees.bind(self, the_challenge)}
-                                className="btn primary xs"
-                            >
-                                {_("Unassign all")}
-                            </button>
-                        </div>
-                    )}
                 </div>
                 {this.props.show_chat && (
                     <div className="rengo-challenge-chat">
