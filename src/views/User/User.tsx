@@ -16,7 +16,7 @@
  */
 
 import * as React from "react";
-import { _, pgettext, interpolate, cc_to_country_name, sorted_locale_countries } from "translate";
+import { _, pgettext, cc_to_country_name, sorted_locale_countries } from "translate";
 import { Link } from "react-router-dom";
 import { post, get, put, del, patch } from "requests";
 import { parse } from "query-string";
@@ -32,7 +32,6 @@ import { ModTools } from "./ModTools";
 import { GameHistoryTable } from "./GameHistoryTable";
 import { ReviewsAndDemosTable } from "./ReviewsAndDemosTable";
 import {
-    longRankString,
     rankString,
     getUserRating,
     humble_rating,
@@ -56,6 +55,7 @@ import { Toggle } from "Toggle";
 import { AchievementList } from "Achievements";
 import swal from "sweetalert2";
 import * as History from "history";
+import { VersusCard } from "./VersusCard";
 
 interface UserProperties {
     match: {
@@ -98,16 +98,7 @@ interface UserInfo {
 
 interface UserState {
     user: UserInfo;
-    vs: {
-        total?: number;
-        wins?: number;
-        losses?: number;
-        draws?: number;
-        winPercent?: number;
-        lossPercent?: number;
-        drawPercent?: number;
-        recent5?: any[];
-    };
+    vs: rest_api.PlayerDetails["vs"];
     ratings: {};
     ip?: {
         country: string;
@@ -116,7 +107,6 @@ interface UserState {
     };
     vacation_left?: number;
     vacation_left_text: string;
-    ranks: [];
     syncRating: null;
     host_ip_settings?: {
         id: number;
@@ -141,7 +131,7 @@ interface UserState {
     friend_request_sent?: boolean;
     friend_request_received?: boolean;
     is_friend?: boolean;
-    active_games?: any[];
+    active_games?: rest_api.players.full.Game[];
     achievements?: any[];
     titles?: any[];
     trophies?: any[];
@@ -151,10 +141,6 @@ interface UserState {
 }
 
 export class User extends React.PureComponent<UserProperties, UserState> {
-    refs: {
-        vacation_left;
-        bot_ai;
-    };
     user_id: number;
     vacation_left: string;
     original_username: string;
@@ -165,12 +151,11 @@ export class User extends React.PureComponent<UserProperties, UserState> {
         super(props);
         this.state = {
             user: null,
-            vs: {},
+            vs: {} as any,
             ratings: {},
             ip: null,
             vacation_left: null,
             vacation_left_text: "",
-            ranks: [],
             syncRating: null,
             host_ip_settings: null,
             new_icon: null,
@@ -299,16 +284,6 @@ export class User extends React.PureComponent<UserProperties, UserState> {
             //state.vs.recent5[i].pretty_date = moment(new Date(state.vs.recent5[i].date)).calendar();
         }
 
-        state.ranks = [];
-        if (state.user.professional) {
-            for (let i = 37; i < Math.max(state.user.ranking, 45) + 1; ++i) {
-                state.ranks.push({ value: i, text: longRankString({ ranking: i, pro: 1 }) });
-            }
-        } else {
-            for (let i = 0; i < Math.max(state.user.ranking, 35) + 1; ++i) {
-                state.ranks.push({ value: i, text: longRankString(i) });
-            }
-        }
         state.syncRating = (rank, type) => {
             if (type === "overall") {
                 state.user.rating = rank * 100 + 50 - 900;
@@ -995,17 +970,7 @@ export class User extends React.PureComponent<UserProperties, UserState> {
                                 {_("Active Games")} ({this.state.active_games.length})
                             </h2>
                         )}
-                        <GameList
-                            list={
-                                // GameList is expecting rengo info on the game (like in ObserveGamesComponent) but here that information is on game.json, so we have to promote it ...
-                                this.state.active_games.map((game) => ({
-                                    rengo: game.json.rengo,
-                                    rengo_teams: game.json.rengo_teams,
-                                    ...game,
-                                }))
-                            }
-                            player={user}
-                        />
+                        <GameList list={this.state.active_games} player={user} />
 
                         <div className="row">
                             <GameHistoryTable user_id={this.user_id} />
@@ -1104,59 +1069,12 @@ export class User extends React.PureComponent<UserProperties, UserState> {
                             </div>
                         )}
 
-                        {(this.state.vs.total || null) && (
+                        {this.state.vs.wins + this.state.vs.losses + this.state.vs.draws > 0 && (
                             <div>
-                                <Card>
-                                    <h5 style={{ textAlign: "center" }}>
-                                        {interpolate(
-                                            "You have won {{vs.wins}} out of {{vs.total}} games against {{username}}",
-                                            {
-                                                "vs.wins": this.state.vs.wins,
-                                                "vs.total": this.state.vs.total,
-                                                username: user.username,
-                                            },
-                                        )}
-                                    </h5>
-                                    <div className="progress">
-                                        {this.state.vs.winPercent > 0 && (
-                                            <div
-                                                className="progress-bar games-won"
-                                                style={{ width: this.state.vs.winPercent + "%" }}
-                                            >
-                                                {this.state.vs.wins}
-                                            </div>
-                                        )}
-                                        {this.state.vs.lossPercent > 0 && (
-                                            <div
-                                                className="progress-bar games-lost"
-                                                style={{ width: this.state.vs.lossPercent + "%" }}
-                                            >
-                                                {this.state.vs.losses}
-                                            </div>
-                                        )}
-                                        {this.state.vs.drawPercent > 0 && (
-                                            <div
-                                                className="progress-bar primary"
-                                                style={{ width: this.state.vs.drawPercent + "%" }}
-                                            >
-                                                {this.state.vs.draws}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {this.state.vs.recent5.map((game, idx) => (
-                                        <div style={{ textAlign: "center" }} key={idx}>
-                                            <span className="date">{game.pretty_date}</span>{" "}
-                                            <a href={`/game/${game.game}`}>#{game.game}</a>
-                                            {game.state === "W" && (
-                                                <i className="fa fa-check-circle-o won"></i>
-                                            )}
-                                            {game.state === "L" && (
-                                                <i className="fa fa-times loss"></i>
-                                            )}
-                                        </div>
-                                    ))}
-                                </Card>
+                                <VersusCard
+                                    {...this.state.vs}
+                                    username={this.state.user.username}
+                                />
                             </div>
                         )}
 

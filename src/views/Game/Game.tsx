@@ -826,7 +826,7 @@ export class Game extends React.PureComponent<GameProperties, GameState> {
 
         if (this.game_id) {
             get("games/%%", this.game_id)
-                .then((game) => {
+                .then((game: rest_api.GameDetails) => {
                     if (game.players.white.id) {
                         player_cache.update(game.players.white, true);
                         this.white_username = game.players.white.username;
@@ -1985,14 +1985,7 @@ export class Game extends React.PureComponent<GameProperties, GameState> {
         const engine: GoEngine = goban ? goban.engine : null;
 
         if (this.goban) {
-            /* Is player? */
-            const players = engine.rengo
-                ? engine.rengo_teams.black.concat(this.goban.engine.rengo_teams.white)
-                : [engine.players.black, engine.players.white];
-
-            const player_ids = players.map((p) => p.id);
-
-            new_state.user_is_player = player_ids.includes(data.get("user").id);
+            new_state.user_is_player = engine.isParticipant(data.get("user").id);
 
             /* Game state */
             new_state.mode = goban.mode;
@@ -2286,7 +2279,9 @@ export class Game extends React.PureComponent<GameProperties, GameState> {
             return false;
         }
         this.setState({ estimating_score: true });
-        this.goban.setScoringMode(true, !is_player || this.goban.engine.phase === "finished");
+        const use_ai_estimate =
+            this.goban.engine.phase === "finished" || !this.goban.engine.isParticipant(user.id);
+        this.goban.setScoringMode(true, use_ai_estimate);
         this.sync_state();
         return true;
     }
@@ -2963,7 +2958,11 @@ export class Game extends React.PureComponent<GameProperties, GameState> {
                         )}
                         <div>
                             {this.goban.engine.players.black.id ===
-                            this.goban.pause_control.paused.pausing_player_id
+                                this.goban.pause_control.paused.pausing_player_id ||
+                            (this.goban.engine.rengo &&
+                                this.goban.engine.rengo_teams.black
+                                    .map((p) => p.id)
+                                    .includes(this.goban.pause_control.paused.pausing_player_id))
                                 ? interpolate(_("{{pauses_left}} pauses left for Black"), {
                                       pauses_left: this.goban.pause_control.paused.pauses_left,
                                   })

@@ -33,7 +33,7 @@ interface CachedSchema {
 
     // TODO: examine these endpoints and write interfaces for these.
     config: ConfigSchema /* /login */;
-    ladders: any /* /me/ladders */;
+    ladders: rest_api.me.Ladder[];
     challenge_list: any /* /me/challenges */;
     blocks: any /* /me/blocks */;
     friends: any /* ui/friends */;
@@ -57,7 +57,6 @@ export interface ConfigSchema {
     superchat_auth: string;
     notification_auth: string;
     incident_auth: string;
-    aga_rankings_enabled: boolean;
 }
 
 interface ChatSchema {
@@ -207,6 +206,8 @@ export interface DataSchema
     "settings.page-selected": string;
     "announcement.last-type": string;
     "demo.settings": DemoSettings;
+
+    "preferred-game-settings": rest_api.ChallengeDetails[];
 
     [player_notes_key: `player-notes.${number}.${number}`]: string;
     [learning_hub_key: `learning-hub.${string}`]: { [page_number: number]: true };

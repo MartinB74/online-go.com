@@ -171,7 +171,6 @@ function load_checkout_libraries(): void {
             script.async = true;
             //script.charset = "utf-8";
             script.onload = () => {
-                console.log("Paddle loaded");
                 resolve();
             };
             script.onerror = () => {
@@ -227,7 +226,6 @@ export function Supporter(props: SupporterProperties): JSX.Element {
                     paddle_js_promise
                         .then(() => {
                             if (config.sandbox) {
-                                console.log("Entering paddle.com sandbox mode");
                                 Paddle.Environment.set("sandbox");
                             }
                             Paddle.Setup({
@@ -256,9 +254,11 @@ export function Supporter(props: SupporterProperties): JSX.Element {
             get(`players/${account_id}/supporter_overrides`)
                 .then((overrides: SupporterOverrides) => {
                     setOverrides(overrides);
+                    /*
                     if (Object.keys(overrides).length > 0) {
                         console.log("Supplementary supporter config: ", overrides);
                     }
+                    */
                 })
                 .catch((err) => {
                     console.error(err);
@@ -410,7 +410,7 @@ export function Supporter(props: SupporterProperties): JSX.Element {
                         <>
                             <div className="Subscriptions">
                                 {config.subscriptions.map((s) => (
-                                    <Subscription key={s.id} subscription={s} />
+                                    <Subscription key={s.id} subscription={s} prices={prices} />
                                 ))}
                             </div>
                         </>
@@ -577,7 +577,6 @@ export function PriceBox({
 
     function paddle_subscribe() {
         setDisabled(true);
-        console.log("Paddle Checkout");
         if (!Paddle) {
             swal("Error", "Paddle is not loaded. Please try again later.", "error").catch(
                 swal.noop,
@@ -601,8 +600,6 @@ export function PriceBox({
             delete paddle_config.email;
         }
 
-        console.log("Paddle config", JSON.parse(JSON.stringify(paddle_config)));
-
         Paddle.Checkout.open(paddle_config);
     }
 
@@ -621,6 +618,8 @@ export function PriceBox({
     const has_subscription = config.subscriptions.length > 0;
     const current_plan_slug = getCurentPlanSlug(config);
 
+    const show_sign_up_before_box = null;
+
     return (
         <div className="PriceBox">
             <h1>{price.title}</h1>
@@ -631,17 +630,27 @@ export function PriceBox({
                 ))}
             </ul>
 
-            <div className="price-increase-note">
-                {interpolate(
-                    _("Sign up before {{date}} to lock in your price before the prices increase"),
-                    {
-                        date: moment("2022-01-31").format("ll"),
-                    },
-                )}
-            </div>
+            {
+                /* don't remove this. We want the translations to stick around
+                 * since we'll probably need to do this every few years or
+                 * whatever as our costs go up as that's the way of things. */
+                show_sign_up_before_box && (
+                    <div className="price-increase-note">
+                        {interpolate(
+                            _(
+                                "Sign up before {{date}} to lock in your price before the prices increase",
+                            ),
+                            {
+                                date: moment("2022-01-31").format("ll"),
+                            },
+                        )}
+                    </div>
+                )
+            }
 
             <h3>
-                {formatMoney(currency, amount)} / {interval === "month" ? _("month") : _("year")}
+                {formatMoneyWithTrimmedZeros(currency, amount)} /{" "}
+                {interval === "month" ? _("month") : _("year")}
             </h3>
 
             {has_subscription ? (
@@ -734,8 +743,28 @@ export function PriceBox({
         </div>
     );
 }
+/*
+                {prices.map((price, idx) => (
+                                        <PriceBox
+                                            key={idx}
+                                            price={price}
+                                            currency={currency}
+                                            interval={interval}
+                                            config={config}
+                                            overrides={overrides}
+                                            account_id={account_id}
+                                        />
+                                    ))}
 
-function Subscription({ subscription }: { subscription: Subscription }): JSX.Element {
+*/
+
+function Subscription({
+    subscription,
+    prices,
+}: {
+    subscription: Subscription;
+    prices: Price[];
+}): JSX.Element {
     const user = data.get("user");
 
     let text: string;
@@ -753,12 +782,21 @@ function Subscription({ subscription }: { subscription: Subscription }): JSX.Ele
             break;
     }
 
-    console.log("Subscription", subscription);
+    const grandfathered_plan = !prices.find(
+        (price) =>
+            price.price[subscription.plan?.currency || ""]?.month === subscription.plan?.amount ||
+            price.price[subscription.plan?.currency || ""]?.year === subscription.plan?.amount,
+    );
 
     function cancel() {
-        console.log("cancel");
         swal({
-            text: _("Are you sure you want to cancel your support for OGS?"),
+            text: grandfathered_plan
+                ? pgettext(
+                      'A "grandfathered plan" means the supporter signed up before prices increased, so is paying at a reduced rate. Signing up again in the future will be more expensive.',
+                      "Are you sure you want to cancel your support for OGS? Please note that you are on a grandfathered plan at a reduced rate.",
+                  )
+                : _("Are you sure you want to cancel your support for OGS?"),
+
             showCancelButton: true,
             focusCancel: true,
         })
@@ -816,7 +854,6 @@ function Subscription({ subscription }: { subscription: Subscription }): JSX.Ele
     }
 
     function updatePaymentMethod() {
-        console.log("update");
         let promise;
 
         switch (subscription.payment_processor) {
@@ -888,6 +925,13 @@ function Subscription({ subscription }: { subscription: Subscription }): JSX.Ele
                     period_in_months: subscription.period_duration_months,
                 })}
             </h3>
+            {(grandfathered_plan || null) && (
+                <h4>
+                    {_(
+                        "Thanks for being a long time supporter! You have your original reduced rate until canceled.",
+                    )}
+                </h4>
+            )}
 
             {(subscription.payment_processor !== "paypal" || null) && (
                 <button onClick={updatePaymentMethod}>{_("Update Payment Method")}</button>
@@ -1255,7 +1299,7 @@ function SupporterOverridesEditor({
 }
 
 function DeprecatedPlanNote({ slug }: { slug: string }): JSX.Element {
-    if (slug === "hane" || slug === "tenuki") {
+    if (slug === "hane" || slug === "tenuki" || slug === "meijin") {
         return null;
     }
 
@@ -1340,6 +1384,23 @@ function formatMoney(currency_code: string, amount: number): string {
         return ret.replace(/[.,].{2}$/, "");
     }
     return ret;
+}
+
+function formatMoneyWithTrimmedZeros(currency_code: string, amount: number): string {
+    if (!currency_code) {
+        return "?";
+    }
+    const currency = currencies[currency_code];
+    const ret = Intl.NumberFormat(navigator.language, {
+        style: "currency",
+        currency: currency_code,
+    }).format(zero_decimal_to_float(currency_code, amount));
+
+    // huf is effectively zero decimal, but still need to send with decimal
+    if (currency.decimal_digits === 0 || currency_code === "HUF") {
+        return ret.replace(/[.,].{2}$/, "");
+    }
+    return ret.replace(".00", "");
 }
 
 function getCurentPlanSlug(config: Config): string {
